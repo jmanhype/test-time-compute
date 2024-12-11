@@ -6,7 +6,12 @@ import pytest
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from src.inference_with_gists import GenerationConfig, Gist, InferenceWithGists, StopReason
+from src.inference_with_gists import (
+    GenerationConfig,
+    Gist,
+    InferenceWithGists,
+    StopReason,
+)
 from src.model_init import has_accelerate
 
 
