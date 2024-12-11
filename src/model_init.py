@@ -7,7 +7,12 @@ import logging
 from typing import Optional, Union
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    PreTrainedModel,
+    PreTrainedTokenizer,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +23,7 @@ def has_accelerate() -> bool:
     """Check if accelerate package is available."""
     try:
         import accelerate
+
         return True
     except ImportError:
         return False
@@ -73,12 +79,11 @@ class ModelInitializer:
 
             # Only use device_map and low_cpu_mem_usage if accelerate is available
             if has_accelerate():
-                load_kwargs.update({
-                    "device_map": "auto",
-                    "low_cpu_mem_usage": True
-                })
+                load_kwargs.update({"device_map": "auto", "low_cpu_mem_usage": True})
             else:
-                logger.warning("Accelerate package not found, using basic device placement")
+                logger.warning(
+                    "Accelerate package not found, using basic device placement"
+                )
                 if self.device == "mps":
                     # Load on CPU first for MPS compatibility
                     load_kwargs["device"] = "cpu"
@@ -86,8 +91,7 @@ class ModelInitializer:
                     load_kwargs["device"] = self.device
 
             self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                **load_kwargs
+                self.model_name, **load_kwargs
             )
 
             # Move model to MPS if needed
@@ -131,9 +135,11 @@ class ModelInitializer:
 
         try:
             # Prepare input
-            full_prompt = f"{system_prompt or self.system_prompt}\n\nUser: {prompt}\n\nAssistant:"
+            full_prompt = (
+                f"{system_prompt or self.system_prompt}\n\nUser: {prompt}\n\nAssistant:"
+            )
             inputs = self.tokenizer(full_prompt, return_tensors="pt", padding=True)
-            
+
             # Move inputs to the same device as model
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
 

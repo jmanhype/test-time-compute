@@ -93,7 +93,7 @@ def test_generation_trace(inference_setup):
 def test_error_handling(inference_setup):
     """Test error handling in generation."""
     inference = inference_setup["inference"]
-    
+
     # Test with invalid max_length
     with pytest.raises(ValueError):
         config = GenerationConfig(max_length=-1)

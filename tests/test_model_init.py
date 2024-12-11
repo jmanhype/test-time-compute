@@ -28,6 +28,7 @@ def test_model_initializer_init():
 
 def test_model_initialization(model_initializer, monkeypatch):
     """Test model and tokenizer initialization."""
+
     # Mock the model and tokenizer classes
     class MockModel:
         def __init__(self, *args, **kwargs):
@@ -74,6 +75,7 @@ def test_model_initialization(model_initializer, monkeypatch):
 
 def test_generate_response(model_initializer, monkeypatch):
     """Test response generation."""
+
     # Mock the necessary components
     class MockOutput:
         def __init__(self):
@@ -100,7 +102,7 @@ def test_generate_response(model_initializer, monkeypatch):
         def __call__(self, text, **kwargs):
             return {
                 "input_ids": torch.tensor([[1, 2, 3]]),
-                "attention_mask": torch.tensor([[1, 1, 1]])
+                "attention_mask": torch.tensor([[1, 1, 1]]),
             }
 
         def decode(self, *args, **kwargs):
@@ -129,6 +131,7 @@ def test_generate_response_without_init():
 
 def test_has_accelerate(monkeypatch):
     """Test has_accelerate function."""
+
     def mock_import_error(*args, **kwargs):
         raise ImportError("No module named 'accelerate'")
 
@@ -140,6 +143,7 @@ def test_has_accelerate(monkeypatch):
     monkeypatch.undo()
     try:
         import accelerate
+
         assert has_accelerate()
     except ImportError:
         pytest.skip("accelerate package not installed")

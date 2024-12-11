@@ -6,7 +6,12 @@ import pytest
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from src.inference_with_gists import GenerationConfig, Gist, InferenceWithGists, StopReason
+from src.inference_with_gists import (
+    GenerationConfig,
+    Gist,
+    InferenceWithGists,
+    StopReason,
+)
 from src.model_init import has_accelerate
 
 
@@ -15,21 +20,18 @@ def inference_setup():
     """Set up test fixtures that can be reused across all tests."""
     # Load a small model for testing
     model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T"
-    
+
     # Configure model loading based on accelerate availability
     load_kwargs = {
         "torch_dtype": torch.float32,  # Use float32 for testing
         "trust_remote_code": True,
     }
-    
+
     if has_accelerate():
-        load_kwargs.update({
-            "device_map": "auto",
-            "low_cpu_mem_usage": True
-        })
+        load_kwargs.update({"device_map": "auto", "low_cpu_mem_usage": True})
     else:
         load_kwargs["device"] = "cpu"
-    
+
     model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token_id is None:
@@ -107,7 +109,7 @@ def test_timeout_handling(inference_setup):
     config = GenerationConfig(
         max_length=1000,  # Long enough to trigger timeout
         timeout_seconds=1.0,  # Short timeout
-        min_token_probability=0.0001  # Set a very low threshold to avoid early stopping
+        min_token_probability=0.0001,  # Set a very low threshold to avoid early stopping
     )
 
     text, gists, reason = inference.generate_with_gists(prompt, config)
@@ -129,7 +131,9 @@ def test_gist_analysis(inference_setup):
     assert "total_tokens" in analysis
     assert "tokens_per_second" in analysis
     assert analysis["total_tokens"] > 0
-    assert analysis["tokens_per_second"] >= 0  # Could be very small but should be non-negative
+    assert (
+        analysis["tokens_per_second"] >= 0
+    )  # Could be very small but should be non-negative
 
 
 def test_generation_trace(inference_setup):
@@ -154,9 +158,9 @@ def test_generate_with_gists_basic(inference_handler):
     """Test basic text generation with gists."""
     config = GenerationConfig(max_length=50)
     prompt = "Write a function to calculate factorial"
-    
+
     text, gists, stop_reason = inference_handler.generate_with_gists(prompt, config)
-    
+
     assert isinstance(text, str)
     assert len(text) > len(prompt)
     assert len(gists) > 0
@@ -166,13 +170,10 @@ def test_generate_with_gists_basic(inference_handler):
 def test_generate_batch(inference_handler):
     """Test batch generation functionality."""
     config = GenerationConfig(max_length=50)
-    prompts = [
-        "Write a function to calculate factorial",
-        "Explain what is recursion"
-    ]
-    
+    prompts = ["Write a function to calculate factorial", "Explain what is recursion"]
+
     results = inference_handler.generate_batch(prompts, config)
-    
+
     assert len(results) == len(prompts)
     for text, gists, stop_reason in results:
         assert isinstance(text, str)
@@ -183,13 +184,12 @@ def test_generate_batch(inference_handler):
 def test_stop_phrases(inference_handler):
     """Test generation stops on encountering stop phrases."""
     config = GenerationConfig(
-        max_length=100,
-        stop_phrases={"Final Answer:", "Here's how:"}
+        max_length=100, stop_phrases={"Final Answer:", "Here's how:"}
     )
     prompt = "Write a function to calculate factorial"
-    
+
     text, gists, stop_reason = inference_handler.generate_with_gists(prompt, config)
-    
+
     if stop_reason == StopReason.STOP_PHRASE:
         assert any(phrase in text for phrase in config.stop_phrases)
 
@@ -198,9 +198,9 @@ def test_timeout(inference_handler):
     """Test generation timeout."""
     config = GenerationConfig(max_length=1000, timeout_seconds=0.1)
     prompt = "Write a very long essay about programming"
-    
+
     text, gists, stop_reason = inference_handler.generate_with_gists(prompt, config)
-    
+
     assert stop_reason == StopReason.TIMEOUT or len(text) < config.max_length
 
 
@@ -208,10 +208,10 @@ def test_invalid_config():
     """Test handling of invalid configuration."""
     with pytest.raises(ValueError):
         GenerationConfig(max_length=-1)
-    
+
     with pytest.raises(ValueError):
         GenerationConfig(temperature=0.0)
-    
+
     with pytest.raises(ValueError):
         GenerationConfig(top_p=1.5)
 
@@ -220,10 +220,10 @@ def test_analyze_gists(inference_handler):
     """Test gist analysis functionality."""
     config = GenerationConfig(max_length=50)
     prompt = "Write a short function"
-    
+
     _, gists, _ = inference_handler.generate_with_gists(prompt, config)
     metrics = inference_handler.analyze_gists(gists)
-    
+
     assert "avg_token_probability" in metrics
     assert "total_tokens" in metrics
     assert "tokens_per_second" in metrics

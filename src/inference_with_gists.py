@@ -194,7 +194,9 @@ class InferenceWithGists:
         gists = []
         start_time = time.time()
         current_text = prompt
-        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.model.device)
+        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(
+            self.model.device
+        )
 
         for token_position in range(config.max_length):
             # Check timeout first
@@ -206,7 +208,9 @@ class InferenceWithGists:
             with torch.no_grad():
                 outputs = self.model(input_ids)
                 next_token_logits = outputs.logits[0, -1, :]
-                next_token_probs = torch.softmax(next_token_logits / config.temperature, dim=-1)
+                next_token_probs = torch.softmax(
+                    next_token_logits / config.temperature, dim=-1
+                )
 
             # Sample next token
             if config.do_sample:
@@ -218,7 +222,9 @@ class InferenceWithGists:
                     filtered_probs[filtered_probs < min_value] = 0.0
                 # Apply top-p filtering
                 if config.top_p < 1.0:
-                    sorted_probs, sorted_indices = torch.sort(filtered_probs, descending=True)
+                    sorted_probs, sorted_indices = torch.sort(
+                        filtered_probs, descending=True
+                    )
                     cumsum_probs = torch.cumsum(sorted_probs, dim=0)
                     mask = cumsum_probs > config.top_p
                     mask[1:] = mask[:-1].clone()
@@ -234,7 +240,7 @@ class InferenceWithGists:
             # Get token probability and text
             token_prob = next_token_probs[next_token_id].item()
             token_text = self.tokenizer.decode(next_token_id)
-            
+
             # Update current text and create gist
             current_text += token_text
             gist = Gist(
@@ -252,7 +258,9 @@ class InferenceWithGists:
 
             # Check for stop phrases
             for phrase in config.stop_phrases:
-                if phrase in current_text[-len(phrase) * 2:]:  # Look at recent text for efficiency
+                if (
+                    phrase in current_text[-len(phrase) * 2 :]
+                ):  # Look at recent text for efficiency
                     return current_text, gists, StopReason.STOP_PHRASE
 
             if next_token_id.item() == self.tokenizer.eos_token_id:
