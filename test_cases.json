@@ -1,0 +1,18 @@
+[
+    {
+        "prompt": "Write a Python function to find the nth Fibonacci number.",
+        "expected": "def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)"
+    },
+    {
+        "prompt": "Create a decorator that measures the execution time of a function.",
+        "expected": "def timing_decorator(func):\n    def wrapper(*args, **kwargs):\n        start = time.time()\n        result = func(*args, **kwargs)\n        end = time.time()\n        print(f'{func.__name__} took {end - start:.2f} seconds')\n        return result\n    return wrapper"
+    },
+    {
+        "prompt": "Write a function to find all prime numbers up to n using the Sieve of Eratosthenes.",
+        "expected": "def sieve(n):\n    primes = [True] * (n + 1)\n    p = 2\n    while p * p <= n:\n        if primes[p]:\n            for i in range(p * p, n + 1, p):\n                primes[i] = False\n        p += 1\n    return [p for p in range(2, n + 1) if primes[p]]"
+    },
+    {
+        "prompt": "Implement a binary search function.",
+        "expected": "def binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left = mid + 1\n        else:\n            right = mid - 1\n    return -1"
+    }
+]
