@@ -31,18 +31,16 @@ class ComputeConfig:
 class TestTimeCompute:
     """Handles test-time compute optimization for inference."""
 
-    model_initializer = None
-    performance_metrics = {
-        "batch_sizes": [],
-        "latencies": [],
-        "throughputs": [],
-        "compute_used": [],
-    }
-
-    @staticmethod
-    def setup_class(model_initializer: ModelInitializer):
-        """Set up test class."""
-        TestTimeCompute.model_initializer = model_initializer
+    def __init__(self, model_name: str = "Qwen/Qwen2.5-Coder-0.5B-Instruct"):
+        """Initialize with a model name."""
+        self.model_initializer = ModelInitializer(model_name=model_name)
+        self.model_initializer.initialize_model()
+        self.performance_metrics = {
+            "batch_sizes": [],
+            "latencies": [],
+            "throughputs": [],
+            "compute_used": [],
+        }
 
     def optimize_batch_size(
         self, sample_inputs: List[str], config: ComputeConfig
