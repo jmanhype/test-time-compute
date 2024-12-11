@@ -1,61 +1,65 @@
-from typing import Optional, Dict, List, Union
+import logging
+from typing import Dict, List, Optional, Union
+
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class ModelInitializer:
     def __init__(self, model_name: str = "Qwen/Qwen2.5-Coder-0.5B-Instruct"):
         """Initialize the model initializer.
-        
+
         Args:
             model_name: Name of the model to use from Hugging Face
         """
         self.model_name = model_name
         self.model = None
         self.tokenizer = None
-        
-    def initialize_model(self, device_map: str = "auto", torch_dtype: str = "auto") -> None:
+
+    def initialize_model(
+        self, device_map: str = "auto", torch_dtype: str = "auto"
+    ) -> None:
         """Initialize the model and tokenizer.
-        
+
         Args:
             device_map: Device mapping strategy ('auto', 'cpu', 'cuda', etc.)
             torch_dtype: Data type for model weights
-            
+
         Raises:
             RuntimeError: If model initialization fails
         """
         try:
             self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                torch_dtype=torch_dtype,
-                device_map=device_map
+                self.model_name, torch_dtype=torch_dtype, device_map=device_map
             )
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            
+
             # Set left padding for decoder-only models
             if self.model.config.is_decoder:
-                self.tokenizer.padding_side = 'left'
+                self.tokenizer.padding_side = "left"
                 if self.tokenizer.pad_token is None:
                     self.tokenizer.pad_token = self.tokenizer.eos_token
-                    
+
             logger.info(f"Successfully initialized model {self.model_name}")
         except Exception as e:
             logger.error(f"Failed to initialize model: {str(e)}")
             raise RuntimeError(f"Model initialization failed: {str(e)}")
-        
-    def generate_response(self,
-                         prompt: Union[str, List[str]],
-                         system_prompt: str = "You are Qwen, a helpful AI assistant.",
-                         max_new_tokens: int = 512,
-                         temperature: float = 0.7,
-                         top_p: float = 0.9,
-                         top_k: int = 50,
-                         do_sample: bool = True,
-                         num_return_sequences: int = 1) -> Union[str, List[str]]:
+
+    def generate_response(
+        self,
+        prompt: Union[str, List[str]],
+        system_prompt: str = "You are Qwen, a helpful AI assistant.",
+        max_new_tokens: int = 512,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        top_k: int = 50,
+        do_sample: bool = True,
+        num_return_sequences: int = 1,
+    ) -> Union[str, List[str]]:
         """Generate a response for the given prompt.
 
         Args:
@@ -89,17 +93,17 @@ class ModelInitializer:
             for p in prompts:
                 messages = [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": p}
+                    {"role": "user", "content": p},
                 ]
                 text = self.tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=True
+                    messages, tokenize=False, add_generation_prompt=True
                 )
                 all_texts.append(text)
 
             # Prepare model inputs
-            model_inputs = self.tokenizer(all_texts, return_tensors="pt", padding=True).to(self.model.device)
+            model_inputs = self.tokenizer(
+                all_texts, return_tensors="pt", padding=True
+            ).to(self.model.device)
 
             # Generate
             generated_ids = self.model.generate(
@@ -110,7 +114,7 @@ class ModelInitializer:
                 top_k=top_k,
                 do_sample=do_sample,
                 num_return_sequences=num_return_sequences,
-                pad_token_id=self.tokenizer.pad_token_id
+                pad_token_id=self.tokenizer.pad_token_id,
             )
 
             # Process outputs
@@ -120,7 +124,9 @@ class ModelInitializer:
                 batch_start = i * num_return_sequences
                 batch_end = (i + 1) * num_return_sequences
                 batch_outputs = generated_ids[batch_start:batch_end, input_len:]
-                decoded = self.tokenizer.batch_decode(batch_outputs, skip_special_tokens=True)
+                decoded = self.tokenizer.batch_decode(
+                    batch_outputs, skip_special_tokens=True
+                )
                 if num_return_sequences == 1:
                     outputs.append(decoded[0])
                 else:
@@ -134,7 +140,7 @@ class ModelInitializer:
         except Exception as e:
             logger.error(f"Generation failed: {str(e)}")
             raise RuntimeError(f"Generation failed: {str(e)}")
-        
+
     def __del__(self):
         """Clean up resources when the object is destroyed."""
         try:

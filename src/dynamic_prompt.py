@@ -2,7 +2,8 @@
 Dynamic Prompting Module for NLRL System.
 Generates tailored prompts incorporating context, parameters, and chain-of-thought instructions.
 """
-from typing import Optional, Dict, Any
+
+from typing import Any, Dict, Optional
 
 # Example problems and solutions for each domain
 EXAMPLES = {
@@ -32,7 +33,7 @@ Solve the differential equation dy/dx + 2y = x^2
 
 # Final Answer:
 y = (x^2/2 - x/2 + 1/4)e^(-2x) + Ce^(-2x)
-"""
+""",
     },
     "coding": {
         "basic": """
@@ -80,8 +81,8 @@ def insert(root, value):
     else:
         root.right = insert(root.right, value)
     return root
-"""
-    }
+""",
+    },
 }
 
 # Template strings for different task types
@@ -104,7 +105,6 @@ Requirements:
 Difficulty Level: {difficulty}
 Expected Steps: {steps}
 """,
-
     "coding": """You are an expert software developer. Write clean, efficient, and well-documented code.
 
 Context and Example:
@@ -124,7 +124,6 @@ Language: Python
 Difficulty Level: {difficulty}
 Expected Steps: {steps}
 """,
-
     "commonsense": """You are a knowledgeable assistant. Think through the problem step by step.
 
 Question:
@@ -138,32 +137,33 @@ Requirements:
 
 Difficulty Level: {difficulty}
 Expected Steps: {steps}
-"""
+""",
 }
+
 
 def get_dynamic_prompt(
     task_type: str,
     problem: str,
     difficulty: str = "medium",
     steps: int = 3,
-    include_example: bool = True
+    include_example: bool = True,
 ) -> str:
     """
     Generate a dynamic prompt that includes contextual examples and instructions.
-    
+
     Args:
         task_type (str): Type of task ('math', 'coding', or 'commonsense')
         problem (str): The problem to solve
         difficulty (str): Difficulty level ('basic', 'medium', 'advanced')
         steps (int): Expected number of reasoning steps
         include_example (bool): Whether to include an example in the prompt
-    
+
     Returns:
         str: The generated prompt with appropriate context and instructions
     """
     # Get the template for the task type
     template = PROMPT_TEMPLATES.get(task_type, PROMPT_TEMPLATES["commonsense"])
-    
+
     # Get appropriate example based on difficulty and task type
     context = ""
     if include_example and task_type in EXAMPLES:
@@ -175,43 +175,40 @@ def get_dynamic_prompt(
                 context = EXAMPLES[task_type]["advanced"]
             else:
                 context = EXAMPLES[task_type]["basic"]
-    
+
     # Format the template with all parameters
     prompt = template.format(
-        context=context,
-        problem=problem,
-        difficulty=difficulty,
-        steps=steps
+        context=context, problem=problem, difficulty=difficulty, steps=steps
     )
-    
+
     return prompt.strip()
+
 
 def get_prompt_config(task_type: str, difficulty: str = "medium") -> Dict[str, Any]:
     """
     Get configuration parameters for prompt generation based on task type and difficulty.
-    
+
     Args:
         task_type (str): Type of task ('math', 'coding', or 'commonsense')
         difficulty (str): Difficulty level ('basic', 'medium', 'advanced')
-    
+
     Returns:
         Dict[str, Any]: Configuration parameters including number of steps and example inclusion
     """
-    config = {
-        "include_example": True,
-        "steps": 3  # default
-    }
-    
+    config = {"include_example": True, "steps": 3}  # default
+
     # Adjust steps based on difficulty
     if difficulty == "basic":
         config["steps"] = 2
     elif difficulty == "advanced":
         config["steps"] = 5
-    
+
     # Task-specific adjustments
     if task_type == "math":
         config["steps"] += 1  # Math usually needs more steps for verification
     elif task_type == "coding":
-        config["include_example"] = difficulty != "basic"  # Skip examples for basic coding
-    
+        config["include_example"] = (
+            difficulty != "basic"
+        )  # Skip examples for basic coding
+
     return config
