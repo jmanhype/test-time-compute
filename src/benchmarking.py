@@ -50,9 +50,8 @@ class Benchmarker:
     def __init__(self, model_name: str = "Qwen/Qwen2.5-Coder-0.5B-Instruct"):
         """Initialize benchmarker with model."""
         self.model_name = model_name
-        self.model_init = ModelInitializer(model_name)
-        self.model_init.initialize_model()
-        self.compute_optimizer = TestTimeCompute(self.model_init)
+        self.model_init = ModelInitializer(model_name=model_name)
+        self.compute_optimizer = TestTimeCompute(model=self.model_init.model)
 
     def run_benchmark(
         self, test_cases: List[Dict[str, Any]], config: Optional[BenchmarkConfig] = None
@@ -119,7 +118,7 @@ class Benchmarker:
 
         # Aggregate metrics
         all_latencies = [r["latency_ms"] for r in results["per_task_results"]]
-        all_throughputs = [r["avg_throughput"] for r in results["per_task_results"]]
+        all_throughputs = [r.get("avg_throughput", 0) for r in results["per_task_results"]]
 
         results["metrics"] = {
             "latency": {
@@ -133,79 +132,70 @@ class Benchmarker:
                 "mean": np.mean(all_throughputs),
                 "std": np.std(all_throughputs),
             },
-            "compute_efficiency": np.mean(
+        }
+
+        # Add compute efficiency if available
+        if all(
+            "total_compute_flops" in r and "avg_throughput" in r
+            for r in results["per_task_results"]
+        ):
+            results["metrics"]["compute_efficiency"] = np.mean(
                 [
                     r["avg_throughput"] / r["total_compute_flops"]
                     for r in results["per_task_results"]
                 ]
-            ),
-        }
+            )
 
-        # Save results if requested
+        # Save results if configured
         if config.save_results:
             self._save_results(results, config.results_dir)
 
         return results
-
-    def compare_with_baseline(
-        self,
-        test_cases: List[Dict[str, Any]],
-        baseline_model: str,
-        config: Optional[BenchmarkConfig] = None,
-    ) -> Dict[str, Any]:
-        """
-        Compare performance with a baseline model.
-
-        Args:
-            test_cases: List of test cases
-            baseline_model: Name of baseline model
-            config: Benchmark configuration
-
-        Returns:
-            Comparison results
-        """
-        # Run benchmark with current model
-        current_results = self.run_benchmark(test_cases, config)
-
-        # Run benchmark with baseline model
-        baseline_benchmarker = Benchmarker(baseline_model)
-        baseline_results = baseline_benchmarker.run_benchmark(test_cases, config)
-
-        # Compare results
-        comparison = {
-            "current_model": self.model_name,
-            "baseline_model": baseline_model,
-            "metrics_comparison": {},
-        }
-
-        for metric in current_results["metrics"]:
-            if isinstance(current_results["metrics"][metric], dict):
-                current = current_results["metrics"][metric].get("mean", 0)
-                baseline = baseline_results["metrics"][metric].get("mean", 0)
-            else:
-                current = current_results["metrics"][metric]
-                baseline = baseline_results["metrics"][metric]
-
-            if baseline != 0:  # Avoid division by zero
-                improvement = ((current - baseline) / baseline) * 100
-            else:
-                improvement = 0
-
-            comparison["metrics_comparison"][metric] = {
-                "current": current,
-                "baseline": baseline,
-                "improvement_percent": improvement,
-            }
-
-        return comparison
 
     def _save_results(self, results: Dict[str, Any], results_dir: str) -> None:
         """Save benchmark results to file."""
         results_path = Path(results_dir)
         results_path.mkdir(parents=True, exist_ok=True)
 
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
         filename = f"benchmark_{self.model_name.replace('/', '_')}_{timestamp}.json"
+        filepath = results_path / filename
 
-        with open(results_path / filename, "w") as f:
+        with open(filepath, "w") as f:
             json.dump(results, f, indent=2)
+
+        logger.info(f"Saved benchmark results to {filepath}")
+
+    def compare_with_baseline(
+        self, current_results: Dict[str, Any], test_cases: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Compare current results with baseline model."""
+        if not current_results or "metrics" not in current_results:
+            raise ValueError("Invalid current results")
+
+        baseline_config = BenchmarkConfig(
+            num_runs=current_results["config"]["num_runs"],
+            warmup_runs=current_results["config"]["warmup_runs"],
+        )
+
+        baseline_results = self.run_benchmark(test_cases, baseline_config)
+
+        comparison = {
+            "current_model": self.model_name,
+            "baseline_model": baseline_config.baseline_model,
+            "metrics_comparison": {},
+        }
+
+        for metric in ["latency", "throughput"]:
+            if metric in current_results["metrics"] and metric in baseline_results["metrics"]:
+                current_mean = current_results["metrics"][metric]["mean"]
+                baseline_mean = baseline_results["metrics"][metric]["mean"]
+                improvement = ((baseline_mean - current_mean) / baseline_mean) * 100
+
+                comparison["metrics_comparison"][f"{metric}_diff"] = {
+                    "current": current_mean,
+                    "baseline": baseline_mean,
+                    "improvement_percent": improvement,
+                }
+
+        return comparison

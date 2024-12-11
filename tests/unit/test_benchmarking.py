@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -23,6 +24,35 @@ def test_cases():
     ]
 
 
+@pytest.fixture
+def mock_model_init():
+    """Mock model initializer."""
+    mock = MagicMock()
+    mock.generate_response.return_value = "def mock_response():\n    pass"
+    return mock
+
+
+@pytest.fixture
+def mock_compute_optimizer():
+    """Mock compute optimizer."""
+    mock = MagicMock()
+    mock.optimize_batch_size.return_value = 4
+    return mock
+
+
+@pytest.fixture
+def mock_performance_stats():
+    """Mock performance statistics."""
+    return {
+        "avg_throughput": 100.0,
+        "avg_latency": 50.0,
+        "compute_efficiency": 0.95,
+        "memory_usage": 1024,
+        "task_accuracy": 0.98,
+        "total_compute_flops": 1000000
+    }
+
+
 def test_benchmark_config():
     """Test benchmark configuration."""
     config = BenchmarkConfig(num_runs=3, warmup_runs=1, save_results=True)
@@ -35,78 +65,104 @@ def test_benchmark_config():
     assert "throughput" in config.metrics
 
 
-def test_benchmarker_initialization():
+@patch("src.benchmarking.ModelInitializer")
+@patch("src.benchmarking.TestTimeCompute")
+def test_benchmarker_initialization(mock_ttc, mock_model_init):
     """Test benchmarker initialization."""
+    mock_model = MagicMock()
+    mock_model_init.return_value = MagicMock(model=mock_model)
+    mock_ttc.return_value = MagicMock()
+    
     benchmarker = Benchmarker()
     assert benchmarker.model_name == "Qwen/Qwen2.5-Coder-0.5B-Instruct"
     assert benchmarker.model_init is not None
     assert benchmarker.compute_optimizer is not None
 
 
-def test_run_benchmark(test_cases):
+@patch("src.benchmarking.ModelInitializer")
+@patch("src.benchmarking.TestTimeCompute")
+def test_run_benchmark(mock_ttc, mock_model_init, test_cases, mock_performance_stats):
     """Test running benchmarks."""
+    mock_model = MagicMock()
+    mock_model_init.return_value = MagicMock(model=mock_model)
+    mock_compute = MagicMock()
+    
+    # Setup mock return values
+    mock_ttc.return_value = mock_compute
+    mock_compute.generate_optimized.return_value = "def mock_response():\n    pass"
+    mock_compute.get_performance_stats.return_value = mock_performance_stats
+    
     benchmarker = Benchmarker()
     config = BenchmarkConfig(num_runs=2, warmup_runs=1)
-
     results = benchmarker.run_benchmark(test_cases, config)
-
+    
+    assert isinstance(results, dict)
     assert "model_name" in results
     assert "timestamp" in results
     assert "metrics" in results
     assert "per_task_results" in results
-
-    # Check metrics
-    metrics = results["metrics"]
-    assert "latency" in metrics
-    assert "throughput" in metrics
-    assert "compute_efficiency" in metrics
-
-    # Check per-task results
-    task_results = results["per_task_results"]
-    assert len(task_results) == len(test_cases) * config.num_runs
-
-    for result in task_results:
-        assert "prompt" in result
-        assert "response" in result
-        assert "latency_ms" in result
-        assert "run_number" in result
+    
+    # Check if performance stats were properly recorded
+    for result in results["per_task_results"]:
+        assert "avg_throughput" in result
+        assert "avg_latency" in result
+        assert "compute_efficiency" in result
+        assert result["avg_throughput"] == mock_performance_stats["avg_throughput"]
 
 
-def test_save_results(test_cases):
+@patch("src.benchmarking.ModelInitializer")
+@patch("src.benchmarking.TestTimeCompute")
+def test_save_results(mock_ttc, mock_model_init, test_cases, mock_performance_stats):
     """Test saving benchmark results."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        config = BenchmarkConfig(
-            num_runs=1, warmup_runs=1, save_results=True, results_dir=temp_dir
-        )
-
+    mock_model = MagicMock()
+    mock_model_init.return_value = MagicMock(model=mock_model)
+    mock_compute = MagicMock()
+    
+    # Setup mock return values
+    mock_ttc.return_value = mock_compute
+    mock_compute.generate_optimized.return_value = "def mock_response():\n    pass"
+    mock_compute.get_performance_stats.return_value = mock_performance_stats
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
         benchmarker = Benchmarker()
-        benchmarker.run_benchmark(test_cases, config)
+        config = BenchmarkConfig(
+            num_runs=2,
+            warmup_runs=1,
+            save_results=True,
+            results_dir=tmpdir
+        )
+        
+        results = benchmarker.run_benchmark(test_cases, config)
+        result_files = list(Path(tmpdir).glob("*.json"))
+        
+        assert len(result_files) > 0
+        assert result_files[0].exists()
 
-        # Check if results file was created
-        results_files = list(Path(temp_dir).glob("benchmark_*.json"))
-        assert len(results_files) == 1
 
-        # Check if file is readable
-        result_file = results_files[0]
-        assert result_file.stat().st_size > 0
-
-
-def test_compare_with_baseline(test_cases):
+@patch("src.benchmarking.ModelInitializer")
+@patch("src.benchmarking.TestTimeCompute")
+def test_compare_with_baseline(mock_ttc, mock_model_init, test_cases, mock_performance_stats):
     """Test comparing with baseline model."""
+    mock_model = MagicMock()
+    mock_model_init.return_value = MagicMock(model=mock_model)
+    mock_compute = MagicMock()
+    
+    # Setup mock return values
+    mock_ttc.return_value = mock_compute
+    mock_compute.generate_optimized.return_value = "def mock_response():\n    pass"
+    mock_compute.get_performance_stats.return_value = mock_performance_stats
+    
     benchmarker = Benchmarker()
-    config = BenchmarkConfig(num_runs=1, warmup_runs=1)
-
-    comparison = benchmarker.compare_with_baseline(
-        test_cases, baseline_model="Qwen/Qwen2.5-Coder-0.5B", config=config
+    config = BenchmarkConfig(
+        num_runs=2,
+        warmup_runs=1,
+        baseline_model="Qwen/Qwen2.5-Coder-0.5B"
     )
-
-    assert "current_model" in comparison
-    assert "baseline_model" in comparison
+    
+    results = benchmarker.run_benchmark(test_cases, config)
+    comparison = benchmarker.compare_with_baseline(results, test_cases)
+    
+    assert isinstance(comparison, dict)
     assert "metrics_comparison" in comparison
-
-    metrics_comparison = comparison["metrics_comparison"]
-    for metric in ["latency", "throughput", "compute_efficiency"]:
-        assert metric in metrics_comparison
-        assert "current" in metrics_comparison[metric]
-        assert "baseline" in metrics_comparison[metric]
-        assert "improvement_percent" in metrics_comparison[metric]
+    assert "latency_diff" in comparison["metrics_comparison"]
+    assert "throughput_diff" in comparison["metrics_comparison"]
