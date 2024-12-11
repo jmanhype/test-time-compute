@@ -1,47 +1,53 @@
+"""
+Unit tests for the test time compute module.
+"""
+
 import pytest
+import torch
 
-from src.model_init import ModelInitializer
-from src.test_time_compute import ComputeConfig, TestTimeCompute
+from src.test_time_compute import TestTimeCompute
+from src.model_init import has_accelerate
 
 
-def test_optimize_batch_size():
+@pytest.fixture(scope="module")
+def compute_setup():
+    """Set up test fixtures that can be reused across all tests."""
+    model_name = "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+    compute = TestTimeCompute(model_name=model_name)
+    return {"compute": compute, "model_name": model_name}
+
+
+def test_optimize_batch_size(compute_setup):
     """Test batch size optimization."""
-    model_init = ModelInitializer()
-    model_init.initialize_model()
-    compute = TestTimeCompute(model_init)
-
-    config = ComputeConfig(max_batch_size=8, min_batch_size=1, target_latency_ms=200)
-
-    sample_inputs = ["Write a simple function.", "Calculate 2+2.", "What is Python?"]
-
-    optimal_size = compute.optimize_batch_size(sample_inputs, config)
-    assert isinstance(optimal_size, int)
-    assert 1 <= optimal_size <= 8
+    compute = compute_setup["compute"]
+    prompts = ["Hello world" for _ in range(5)]
+    
+    optimal_batch_size = compute.optimize_batch_size(prompts)
+    assert isinstance(optimal_batch_size, int)
+    assert optimal_batch_size > 0
+    assert optimal_batch_size <= len(prompts)
 
 
-def test_generate_optimized_single():
-    """Test optimized generation with single prompt."""
-    model_init = ModelInitializer()
-    model_init.initialize_model()
-    compute = TestTimeCompute(model_init)
-
-    prompt = "Write a hello world program."
+def test_generate_optimized_single(compute_setup):
+    """Test optimized generation for a single prompt."""
+    compute = compute_setup["compute"]
+    prompt = "Write a hello world program"
+    
     result = compute.generate_optimized(prompt)
-
     assert isinstance(result, str)
     assert len(result) > 0
 
 
-def test_generate_optimized_batch():
-    """Test optimized generation with multiple prompts."""
-    model_init = ModelInitializer()
-    model_init.initialize_model()
-    compute = TestTimeCompute(model_init)
-
-    prompts = ["Write a for loop.", "Print hello world.", "Define a function."]
-
+def test_generate_optimized_batch(compute_setup):
+    """Test optimized generation for multiple prompts."""
+    compute = compute_setup["compute"]
+    prompts = [
+        "Write a hello world program",
+        "Calculate factorial of n",
+        "Print numbers 1 to 10"
+    ]
+    
     results = compute.generate_optimized(prompts)
-
     assert isinstance(results, list)
     assert len(results) == len(prompts)
     for result in results:
@@ -49,52 +55,57 @@ def test_generate_optimized_batch():
         assert len(result) > 0
 
 
-def test_performance_metrics():
-    """Test performance metrics tracking."""
-    model_init = ModelInitializer()
-    model_init.initialize_model()
-    compute = TestTimeCompute(model_init)
-
-    # Generate some outputs to collect metrics
-    prompts = ["Test prompt 1.", "Test prompt 2."]
-    _ = compute.generate_optimized(prompts)
-
-    stats = compute.get_performance_stats()
-    assert isinstance(stats, dict)
-    assert "avg_latency_ms" in stats
-    assert "avg_throughput" in stats
-    assert "total_compute_flops" in stats
-    assert "avg_batch_size" in stats
+def test_performance_metrics(compute_setup):
+    """Test performance metrics collection."""
+    compute = compute_setup["compute"]
+    prompt = "Write a simple function"
+    
+    # Generate some text to collect metrics
+    compute.generate_optimized(prompt)
+    
+    metrics = compute.get_performance_metrics()
+    assert isinstance(metrics, dict)
+    assert "avg_tokens_per_second" in metrics
+    assert "total_tokens_generated" in metrics
+    assert metrics["total_tokens_generated"] >= 0
+    assert metrics["avg_tokens_per_second"] >= 0
 
 
-def test_compute_config():
-    """Test compute configuration options."""
-    config = ComputeConfig(
-        max_batch_size=16, target_latency_ms=150, adaptive_batching=True
-    )
-
-    assert config.max_batch_size == 16
-    assert config.target_latency_ms == 150
-    assert config.adaptive_batching == True
-
-
-def test_reset_metrics():
+def test_reset_metrics(compute_setup):
     """Test resetting performance metrics."""
-    model_init = ModelInitializer()
-    model_init.initialize_model()
-    compute = TestTimeCompute(model_init)
-
-    # Generate some outputs
-    _ = compute.generate_optimized("Test prompt")
-
-    # Verify metrics were collected
-    assert len(compute.performance_metrics["latencies"]) > 0
-
+    compute = compute_setup["compute"]
+    
+    # Generate some text to collect metrics
+    compute.generate_optimized("Test prompt")
+    
+    # Get metrics before reset
+    metrics_before = compute.get_performance_metrics()
+    assert metrics_before["total_tokens_generated"] > 0
+    
     # Reset metrics
     compute.reset_metrics()
+    
+    # Get metrics after reset
+    metrics_after = compute.get_performance_metrics()
+    assert metrics_after["total_tokens_generated"] == 0
+    assert metrics_after["avg_tokens_per_second"] == 0.0
 
-    # Verify metrics were reset
-    assert len(compute.performance_metrics["latencies"]) == 0
-    assert len(compute.performance_metrics["batch_sizes"]) == 0
-    assert len(compute.performance_metrics["throughputs"]) == 0
-    assert len(compute.performance_metrics["compute_used"]) == 0
+
+def test_memory_management(compute_setup):
+    """Test memory management during generation."""
+    compute = compute_setup["compute"]
+    
+    # Get initial memory usage
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        initial_memory = torch.cuda.memory_allocated()
+    
+    # Generate some text
+    compute.generate_optimized("Test prompt")
+    
+    # Check memory after generation
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        final_memory = torch.cuda.memory_allocated()
+        # Memory usage should be reasonable
+        assert (final_memory - initial_memory) < 1e10  # Less than 10GB difference

@@ -105,10 +105,10 @@ class InferenceWithGists:
             self.model = model
             self.tokenizer = tokenizer
         else:
-            self.model_initializer = ModelInitializer(model_name)
-            self.model_initializer.initialize_model()
-            self.model = self.model_initializer.model
-            self.tokenizer = self.model_initializer.tokenizer
+            initializer = ModelInitializer(model_name=model_name)
+            initializer.initialize_model()
+            self.model = initializer.model
+            self.tokenizer = initializer.tokenizer
 
         self.device = next(self.model.parameters()).device
 
@@ -179,132 +179,112 @@ class InferenceWithGists:
         return False, None
 
     def generate_with_gists(
-        self, prompt: Union[str, List[str]], config: Optional[GenerationConfig] = None
-    ) -> Union[
-        Tuple[str, List[Gist], StopReason], List[Tuple[str, List[Gist], StopReason]]
-    ]:
+        self, prompt: str, config: GenerationConfig
+    ) -> Tuple[str, List[Gist], StopReason]:
         """
         Generate text with intermediate gists.
 
         Args:
-            prompt: Input prompt or list of prompts
+            prompt: Input prompt
             config: Generation configuration
 
         Returns:
-            For single prompt: Tuple of (final_text, gists, stop_reason)
-            For multiple prompts: List of tuples, each containing (final_text, gists, stop_reason)
+            Tuple of (final text, list of gists, stop reason)
         """
-        if config is None:
-            config = GenerationConfig()
-
-        # Input validation
-        if not prompt:
-            raise ValueError("Prompt cannot be empty")
-
-        if isinstance(prompt, list):
-            if not all(p.strip() for p in prompt):
-                raise ValueError("All prompts in batch must be non-empty")
-            return [self.generate_with_gists(p, config) for p in prompt]
-
-        # Prepare input
-        input_ids = self._prepare_input(prompt)
-        current_ids = input_ids["input_ids"]
-        attention_mask = input_ids.get("attention_mask", None)
-
-        # Initialize tracking variables
         gists = []
         start_time = time.time()
-        current_text = ""
+        current_text = prompt
+        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.model.device)
 
-        try:
-            # Generate tokens one at a time
-            for step in range(config.max_length):
-                # Get model output for next token
-                with torch.no_grad():
-                    outputs = self.model(
-                        input_ids=current_ids,
-                        attention_mask=(
-                            attention_mask if attention_mask is not None else None
-                        ),
-                    )
+        for token_position in range(config.max_length):
+            # Check timeout first
+            elapsed_time = time.time() - start_time
+            if elapsed_time > config.timeout_seconds:
+                return current_text, gists, StopReason.TIMEOUT
 
-                # Get next token probabilities
-                next_token_logits = outputs.logits[:, -1, :]
+            # Generate next token probabilities
+            with torch.no_grad():
+                outputs = self.model(input_ids)
+                next_token_logits = outputs.logits[0, -1, :]
+                next_token_probs = torch.softmax(next_token_logits / config.temperature, dim=-1)
 
-                # Apply temperature and top-p sampling
-                if config.do_sample:
-                    next_token_logits = next_token_logits / config.temperature
-                    if config.top_p < 1.0:
-                        sorted_logits, sorted_indices = torch.sort(
-                            next_token_logits, descending=True
-                        )
-                        cumulative_probs = torch.cumsum(
-                            torch.softmax(sorted_logits, dim=-1), dim=-1
-                        )
-                        sorted_indices_to_remove = cumulative_probs > config.top_p
-                        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[
-                            ..., :-1
-                        ].clone()
-                        sorted_indices_to_remove[..., 0] = 0
-                        indices_to_remove = sorted_indices_to_remove.scatter(
-                            1, sorted_indices, sorted_indices_to_remove
-                        )
-                        next_token_logits[indices_to_remove] = float("-inf")
+            # Sample next token
+            if config.do_sample:
+                filtered_probs = next_token_probs.clone()
+                # Apply top-k filtering
+                if config.top_k > 0:
+                    top_k_values, _ = torch.topk(filtered_probs, config.top_k)
+                    min_value = top_k_values[-1]
+                    filtered_probs[filtered_probs < min_value] = 0.0
+                # Apply top-p filtering
+                if config.top_p < 1.0:
+                    sorted_probs, sorted_indices = torch.sort(filtered_probs, descending=True)
+                    cumsum_probs = torch.cumsum(sorted_probs, dim=0)
+                    mask = cumsum_probs > config.top_p
+                    mask[1:] = mask[:-1].clone()
+                    mask[0] = False
+                    filtered_probs[sorted_indices[mask]] = 0.0
+                # Renormalize probabilities
+                if filtered_probs.sum() > 0:
+                    filtered_probs = filtered_probs / filtered_probs.sum()
+                next_token_id = torch.multinomial(filtered_probs, num_samples=1)
+            else:
+                next_token_id = torch.argmax(next_token_probs).unsqueeze(0)
 
-                # Sample next token
-                if config.do_sample:
-                    probs = torch.softmax(next_token_logits, dim=-1)
-                    next_token = torch.multinomial(probs, num_samples=1)
-                else:
-                    next_token = torch.argmax(next_token_logits, dim=-1).unsqueeze(-1)
+            # Get token probability and text
+            token_prob = next_token_probs[next_token_id].item()
+            token_text = self.tokenizer.decode(next_token_id)
+            
+            # Update current text and create gist
+            current_text += token_text
+            gist = Gist(
+                token=token_text,
+                token_probability=token_prob,
+                cumulative_text=current_text,  # Use the full cumulative text
+                timestamp=time.time() - start_time,
+                token_position=token_position,
+            )
+            gists.append(gist)
 
-                # Get token probability
-                token_prob = self._get_token_probability(
-                    next_token_logits, next_token.item()
-                )
+            # Check stopping conditions
+            if token_prob < config.min_token_probability:
+                return current_text, gists, StopReason.LOW_PROBABILITY
 
-                # Decode token
-                token_text = self.tokenizer.decode(next_token[0])
-                current_text += token_text
+            # Check for stop phrases
+            for phrase in config.stop_phrases:
+                if phrase in current_text[-len(phrase) * 2:]:  # Look at recent text for efficiency
+                    return current_text, gists, StopReason.STOP_PHRASE
 
-                # Create gist
-                gist = Gist(
-                    token=token_text,
-                    token_probability=token_prob,
-                    cumulative_text=current_text,
-                    timestamp=time.time() - start_time,
-                    token_position=step,
-                )
-                gists.append(gist)
+            if next_token_id.item() == self.tokenizer.eos_token_id:
+                return current_text, gists, StopReason.EOS_TOKEN
 
-                # Check if we should stop
-                should_stop, reason = self._should_stop(
-                    current_text, token_prob, next_token.item(), start_time, config
-                )
-
-                if should_stop:
-                    return current_text, gists, reason
-
-                # Update input ids for next iteration
-                current_ids = torch.cat([current_ids, next_token], dim=-1)
-                if attention_mask is not None:
-                    attention_mask = torch.cat(
-                        [
-                            attention_mask,
-                            attention_mask.new_ones((attention_mask.shape[0], 1)),
-                        ],
-                        dim=-1,
-                    )
-
-        except Exception as e:
-            logger.error(f"Error during generation: {str(e)}")
-            return current_text, gists, StopReason.MAX_LENGTH
+            # Update input_ids for next iteration
+            input_ids = torch.cat([input_ids, next_token_id.unsqueeze(0)], dim=1)
 
         return current_text, gists, StopReason.MAX_LENGTH
 
+    def generate_batch(
+        self, prompts: List[str], config: GenerationConfig
+    ) -> List[Tuple[str, List[Gist], StopReason]]:
+        """
+        Generate text for multiple prompts in parallel.
+
+        Args:
+            prompts: List of input prompts
+            config: Generation configuration
+
+        Returns:
+            List of (final text, gists, stop reason) tuples
+        """
+        results = []
+        for prompt in prompts:
+            result = self.generate_with_gists(prompt, config)
+            results.append(result)
+        return results
+
     def analyze_gists(self, gists: List[Gist]) -> Dict[str, float]:
         """
-        Analyze gists to provide insights about the generation process.
+        Analyze generation gists to provide insights about the generation process.
 
         Args:
             gists: List of generation gists
