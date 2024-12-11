@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 import logging
-from .model_init import ModelInitializer
+from src.model_init import ModelInitializer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

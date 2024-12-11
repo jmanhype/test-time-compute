@@ -26,15 +26,18 @@ class ComputeConfig:
 class TestTimeCompute:
     """Handles test-time compute optimization for inference."""
     
-    def __init__(self, model_initializer: ModelInitializer):
-        """Initialize with a model initializer."""
-        self.model_initializer = model_initializer
-        self.performance_metrics = {
-            "batch_sizes": [],
-            "latencies": [],
-            "throughputs": [],
-            "compute_used": []
-        }
+    model_initializer = None
+    performance_metrics = {
+        "batch_sizes": [],
+        "latencies": [],
+        "throughputs": [],
+        "compute_used": []
+    }
+    
+    @staticmethod
+    def setup_class(model_initializer: ModelInitializer):
+        """Set up test class."""
+        TestTimeCompute.model_initializer = model_initializer
         
     def optimize_batch_size(self, 
                           sample_inputs: List[str], 
