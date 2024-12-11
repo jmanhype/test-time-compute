@@ -118,7 +118,9 @@ class Benchmarker:
 
         # Aggregate metrics
         all_latencies = [r["latency_ms"] for r in results["per_task_results"]]
-        all_throughputs = [r.get("avg_throughput", 0) for r in results["per_task_results"]]
+        all_throughputs = [
+            r.get("avg_throughput", 0) for r in results["per_task_results"]
+        ]
 
         results["metrics"] = {
             "latency": {
@@ -187,7 +189,10 @@ class Benchmarker:
         }
 
         for metric in ["latency", "throughput"]:
-            if metric in current_results["metrics"] and metric in baseline_results["metrics"]:
+            if (
+                metric in current_results["metrics"]
+                and metric in baseline_results["metrics"]
+            ):
                 current_mean = current_results["metrics"][metric]["mean"]
                 baseline_mean = baseline_results["metrics"][metric]["mean"]
                 improvement = ((baseline_mean - current_mean) / baseline_mean) * 100

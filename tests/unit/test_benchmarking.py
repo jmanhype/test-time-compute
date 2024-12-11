@@ -49,7 +49,7 @@ def mock_performance_stats():
         "compute_efficiency": 0.95,
         "memory_usage": 1024,
         "task_accuracy": 0.98,
-        "total_compute_flops": 1000000
+        "total_compute_flops": 1000000,
     }
 
 
@@ -72,7 +72,7 @@ def test_benchmarker_initialization(mock_ttc, mock_model_init):
     mock_model = MagicMock()
     mock_model_init.return_value = MagicMock(model=mock_model)
     mock_ttc.return_value = MagicMock()
-    
+
     benchmarker = Benchmarker()
     assert benchmarker.model_name == "Qwen/Qwen2.5-Coder-0.5B-Instruct"
     assert benchmarker.model_init is not None
@@ -86,22 +86,22 @@ def test_run_benchmark(mock_ttc, mock_model_init, test_cases, mock_performance_s
     mock_model = MagicMock()
     mock_model_init.return_value = MagicMock(model=mock_model)
     mock_compute = MagicMock()
-    
+
     # Setup mock return values
     mock_ttc.return_value = mock_compute
     mock_compute.generate_optimized.return_value = "def mock_response():\n    pass"
     mock_compute.get_performance_stats.return_value = mock_performance_stats
-    
+
     benchmarker = Benchmarker()
     config = BenchmarkConfig(num_runs=2, warmup_runs=1)
     results = benchmarker.run_benchmark(test_cases, config)
-    
+
     assert isinstance(results, dict)
     assert "model_name" in results
     assert "timestamp" in results
     assert "metrics" in results
     assert "per_task_results" in results
-    
+
     # Check if performance stats were properly recorded
     for result in results["per_task_results"]:
         assert "avg_throughput" in result
@@ -117,51 +117,48 @@ def test_save_results(mock_ttc, mock_model_init, test_cases, mock_performance_st
     mock_model = MagicMock()
     mock_model_init.return_value = MagicMock(model=mock_model)
     mock_compute = MagicMock()
-    
+
     # Setup mock return values
     mock_ttc.return_value = mock_compute
     mock_compute.generate_optimized.return_value = "def mock_response():\n    pass"
     mock_compute.get_performance_stats.return_value = mock_performance_stats
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         benchmarker = Benchmarker()
         config = BenchmarkConfig(
-            num_runs=2,
-            warmup_runs=1,
-            save_results=True,
-            results_dir=tmpdir
+            num_runs=2, warmup_runs=1, save_results=True, results_dir=tmpdir
         )
-        
+
         results = benchmarker.run_benchmark(test_cases, config)
         result_files = list(Path(tmpdir).glob("*.json"))
-        
+
         assert len(result_files) > 0
         assert result_files[0].exists()
 
 
 @patch("src.benchmarking.ModelInitializer")
 @patch("src.benchmarking.TestTimeCompute")
-def test_compare_with_baseline(mock_ttc, mock_model_init, test_cases, mock_performance_stats):
+def test_compare_with_baseline(
+    mock_ttc, mock_model_init, test_cases, mock_performance_stats
+):
     """Test comparing with baseline model."""
     mock_model = MagicMock()
     mock_model_init.return_value = MagicMock(model=mock_model)
     mock_compute = MagicMock()
-    
+
     # Setup mock return values
     mock_ttc.return_value = mock_compute
     mock_compute.generate_optimized.return_value = "def mock_response():\n    pass"
     mock_compute.get_performance_stats.return_value = mock_performance_stats
-    
+
     benchmarker = Benchmarker()
     config = BenchmarkConfig(
-        num_runs=2,
-        warmup_runs=1,
-        baseline_model="Qwen/Qwen2.5-Coder-0.5B"
+        num_runs=2, warmup_runs=1, baseline_model="Qwen/Qwen2.5-Coder-0.5B"
     )
-    
+
     results = benchmarker.run_benchmark(test_cases, config)
     comparison = benchmarker.compare_with_baseline(results, test_cases)
-    
+
     assert isinstance(comparison, dict)
     assert "metrics_comparison" in comparison
     assert "latency_diff" in comparison["metrics_comparison"]
