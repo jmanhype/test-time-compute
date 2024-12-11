@@ -35,138 +35,9 @@ class TestTimeCompute:
         """Initialize with a model name."""
         self.model_initializer = ModelInitializer(model_name=model_name)
         self.model_initializer.initialize_model()
-        self.performance_metrics = {
-            "batch_sizes": [],
-            "latencies": [],
-            "throughputs": [],
-            "compute_used": [],
-        }
+        self.reset_metrics()
 
-    def optimize_batch_size(
-        self, sample_inputs: List[str], config: ComputeConfig
-    ) -> int:
-        """
-        Determine optimal batch size based on latency constraints.
-
-        Args:
-            sample_inputs: List of sample inputs for calibration
-            config: Compute configuration
-
-        Returns:
-            Optimal batch size
-        """
-        if not config.adaptive_batching:
-            return config.max_batch_size
-
-        # Binary search for optimal batch size
-        left, right = config.min_batch_size, config.max_batch_size
-        optimal_size = config.min_batch_size
-
-        while left <= right:
-            mid = (left + right) // 2
-            batch = sample_inputs[:mid]
-
-            # Measure latency
-            start_time = time.time()
-            _ = self.model_initializer.generate_response(
-                batch[0] if len(batch) == 1 else batch
-            )
-            latency = (time.time() - start_time) * 1000  # Convert to ms
-
-            if latency <= config.target_latency_ms:
-                optimal_size = mid
-                left = mid + 1
-            else:
-                right = mid - 1
-
-        return optimal_size
-
-    def estimate_compute(self, num_tokens: int, batch_size: int) -> float:
-        """
-        Estimate compute cost in FLOPS.
-
-        Args:
-            num_tokens: Number of tokens to generate
-            batch_size: Batch size
-
-        Returns:
-            Estimated FLOPS
-        """
-        # Simplified estimate based on model size and generation length
-        num_params = sum(p.numel() for p in self.model_initializer.model.parameters())
-        return (
-            num_params * num_tokens * batch_size * 2
-        )  # *2 for forward and backward pass
-
-    def generate_optimized(
-        self, prompts: Union[str, List[str]], config: Optional[ComputeConfig] = None
-    ) -> Union[str, List[str]]:
-        """
-        Generate responses with optimized compute allocation.
-
-        Args:
-            prompts: Input prompt or list of prompts
-            config: Compute configuration
-
-        Returns:
-            Generated text or list of generated texts
-        """
-        if config is None:
-            config = ComputeConfig()
-
-        if isinstance(prompts, str):
-            prompts = [prompts]
-
-        # Optimize batch size
-        optimal_batch_size = self.optimize_batch_size(prompts[:10], config)
-        logger.info(f"Using optimal batch size: {optimal_batch_size}")
-
-        # Process in batches
-        results = []
-        for i in range(0, len(prompts), optimal_batch_size):
-            batch = prompts[i : i + optimal_batch_size]
-
-            start_time = time.time()
-            batch_results = self.model_initializer.generate_response(
-                batch[0] if len(batch) == 1 else batch
-            )
-            end_time = time.time()
-
-            # Record metrics
-            latency = (end_time - start_time) * 1000
-            throughput = len(batch) / (end_time - start_time)
-            compute = self.estimate_compute(
-                num_tokens=100, batch_size=len(batch)  # Approximate tokens per response
-            )
-
-            self.performance_metrics["batch_sizes"].append(len(batch))
-            self.performance_metrics["latencies"].append(latency)
-            self.performance_metrics["throughputs"].append(throughput)
-            self.performance_metrics["compute_used"].append(compute)
-
-            if isinstance(batch_results, list):
-                results.extend(batch_results)
-            else:
-                results.append(batch_results)
-
-        return results[0] if len(prompts) == 1 else results
-
-    def get_performance_stats(self) -> Dict[str, float]:
-        """Get statistics about inference performance."""
-        if not self.performance_metrics["latencies"]:
-            return {}
-
-        return {
-            "avg_latency_ms": sum(self.performance_metrics["latencies"])
-            / len(self.performance_metrics["latencies"]),
-            "avg_throughput": sum(self.performance_metrics["throughputs"])
-            / len(self.performance_metrics["throughputs"]),
-            "total_compute_flops": sum(self.performance_metrics["compute_used"]),
-            "avg_batch_size": sum(self.performance_metrics["batch_sizes"])
-            / len(self.performance_metrics["batch_sizes"]),
-        }
-
-    def reset_metrics(self) -> None:
+    def reset_metrics(self):
         """Reset performance metrics."""
         self.performance_metrics = {
             "batch_sizes": [],
@@ -174,3 +45,112 @@ class TestTimeCompute:
             "throughputs": [],
             "compute_used": [],
         }
+
+    def get_performance_metrics(self) -> Dict[str, List[float]]:
+        """Get current performance metrics."""
+        return self.performance_metrics
+
+    def optimize_batch_size(
+        self, sample_inputs: List[str], config: Optional[ComputeConfig] = None
+    ) -> int:
+        """
+        Determine optimal batch size based on latency constraints.
+
+        Args:
+            sample_inputs: List of sample inputs to test with
+            config: Configuration for optimization, uses default if None
+
+        Returns:
+            Optimal batch size
+        """
+        if config is None:
+            config = ComputeConfig()
+
+        # Start with minimum batch size
+        current_batch_size = config.min_batch_size
+        best_batch_size = current_batch_size
+        min_latency = float('inf')
+
+        while current_batch_size <= min(config.max_batch_size, len(sample_inputs)):
+            # Measure latency for current batch size
+            batch = sample_inputs[:current_batch_size]
+            start_time = time.time()
+            
+            # Run a few iterations to get stable measurements
+            for _ in range(config.warmup_iterations):
+                with torch.no_grad():
+                    _ = self.model_initializer.model.generate(
+                        self.model_initializer.tokenizer(
+                            batch,
+                            return_tensors="pt",
+                            padding=True,
+                            truncation=True,
+                        ).input_ids.to(self.model_initializer.model.device)
+                    )
+
+            latency = (time.time() - start_time) / config.warmup_iterations * 1000  # ms
+            
+            # Update metrics
+            self.performance_metrics["batch_sizes"].append(current_batch_size)
+            self.performance_metrics["latencies"].append(latency)
+            self.performance_metrics["throughputs"].append(current_batch_size / latency)
+            
+            # Check if this batch size meets our constraints
+            if latency <= config.target_latency_ms and latency < min_latency:
+                min_latency = latency
+                best_batch_size = current_batch_size
+            
+            # If we're already over target latency, no point trying larger batches
+            if latency > config.target_latency_ms:
+                break
+                
+            current_batch_size *= 2
+
+        return best_batch_size
+
+    def generate_optimized(
+        self, prompts: Union[str, List[str]], config: Optional[ComputeConfig] = None
+    ) -> Union[str, List[str]]:
+        """
+        Generate text with optimized batch size.
+
+        Args:
+            prompts: Single prompt or list of prompts
+            config: Configuration for optimization, uses default if None
+
+        Returns:
+            Generated text or list of generated texts
+        """
+        if config is None:
+            config = ComputeConfig()
+
+        # Handle single prompt case
+        if isinstance(prompts, str):
+            prompts = [prompts]
+            return_single = True
+        else:
+            return_single = False
+
+        # Get optimal batch size
+        optimal_batch_size = self.optimize_batch_size(prompts, config)
+
+        # Generate in batches
+        results = []
+        for i in range(0, len(prompts), optimal_batch_size):
+            batch = prompts[i:i + optimal_batch_size]
+            inputs = self.model_initializer.tokenizer(
+                batch,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            ).input_ids.to(self.model_initializer.model.device)
+
+            with torch.no_grad():
+                outputs = self.model_initializer.model.generate(inputs)
+
+            texts = self.model_initializer.tokenizer.batch_decode(
+                outputs, skip_special_tokens=True
+            )
+            results.extend(texts)
+
+        return results[0] if return_single else results
