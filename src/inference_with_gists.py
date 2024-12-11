@@ -50,9 +50,8 @@ class GenerationConfig:
         if self.stop_phrases is None:
             self.stop_phrases = {
                 "Final Answer:",
-                "Therefore, the answer is",
-                "In conclusion,",
-                "###",
+                "Let's approach this step by step:",
+                "Here's what we'll do:",
             }
 
         # Validate parameters
@@ -88,17 +87,29 @@ class Gist:
 class InferenceWithGists:
     """Handles token-by-token generation with intermediate outputs."""
 
-    def __init__(self, model_name: str = "Qwen/Qwen2.5-Coder-0.5B-Instruct"):
+    def __init__(
+        self,
+        model: Optional[PreTrainedModel] = None,
+        tokenizer: Optional[PreTrainedTokenizer] = None,
+        model_name: str = "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+    ):
         """
-        Initialize the inference handler with a Qwen model.
+        Initialize the inference handler.
 
         Args:
-            model_name: Name of the model to use
+            model: Optional pre-initialized model
+            tokenizer: Optional pre-initialized tokenizer
+            model_name: Name of the model to use if model/tokenizer not provided
         """
-        self.model_initializer = ModelInitializer(model_name)
-        self.model_initializer.initialize_model()
-        self.model = self.model_initializer.model
-        self.tokenizer = self.model_initializer.tokenizer
+        if model is not None and tokenizer is not None:
+            self.model = model
+            self.tokenizer = tokenizer
+        else:
+            self.model_initializer = ModelInitializer(model_name)
+            self.model_initializer.initialize_model()
+            self.model = self.model_initializer.model
+            self.tokenizer = self.model_initializer.tokenizer
+
         self.device = next(self.model.parameters()).device
 
     def _prepare_input(self, prompt: Union[str, List[str]]) -> Dict[str, torch.Tensor]:
