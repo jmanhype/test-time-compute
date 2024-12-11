@@ -7,12 +7,7 @@ import logging
 from typing import Optional, Union
 
 import torch
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    PreTrainedModel,
-    PreTrainedTokenizer,
-)
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

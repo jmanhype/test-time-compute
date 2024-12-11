@@ -5,8 +5,8 @@ Unit tests for the test time compute module.
 import pytest
 import torch
 
-from src.test_time_compute import TestTimeCompute
 from src.model_init import has_accelerate
+from src.test_time_compute import TestTimeCompute
 
 
 @pytest.fixture(scope="module")
