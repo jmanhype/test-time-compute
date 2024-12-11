@@ -80,7 +80,7 @@ def test_stop_phrase_detection(inference_setup):
         max_length=50,
         min_token_probability=0.001,  # Lower threshold to allow more generation
         temperature=0.7,
-        stop_phrases={"Final Answer:", "Therefore,"}
+        stop_phrases={"Final Answer:", "Therefore,"},
     )
 
     text, gists, reason = inference.generate_with_gists(prompt, config)
@@ -89,8 +89,12 @@ def test_stop_phrase_detection(inference_setup):
     # 1. The model generated some text and stopped on a phrase
     # 2. The model reached max length
     # 3. The model generated some text and stopped on low probability
-    assert reason in [StopReason.MAX_LENGTH, StopReason.STOP_PHRASE, StopReason.LOW_PROBABILITY]
-    
+    assert reason in [
+        StopReason.MAX_LENGTH,
+        StopReason.STOP_PHRASE,
+        StopReason.LOW_PROBABILITY,
+    ]
+
     # Check that some text was generated, even if it's just a few tokens
     assert len(gists) > 0
 
