@@ -113,18 +113,18 @@ class InferenceWithGists:
             config = GenerationConfig()
 
         start_time = time.time()
-        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(
-            self.model.device
-        )
+        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.model.device)
         generated_text = ""
         gists = []
         cumulative_text = prompt
         token_position = 0
+        max_retries = 5  # Add max retries for low probability tokens
+        retry_count = 0
 
         while len(input_ids[0]) < config.max_length:
             current_time = time.time()
             elapsed_time = current_time - start_time
-
+            
             # Check timeout
             if elapsed_time > config.timeout_seconds:
                 if len(gists) > 0:
@@ -136,25 +136,19 @@ class InferenceWithGists:
                 outputs = self.model(input_ids)
                 next_token_logits = outputs.logits[:, -1, :] / config.temperature
                 next_token_probs = torch.softmax(next_token_logits, dim=-1)
-
+                
                 # Apply top-p sampling
-                sorted_probs, sorted_indices = torch.sort(
-                    next_token_probs, descending=True
-                )
+                sorted_probs, sorted_indices = torch.sort(next_token_probs, descending=True)
                 cumsum_probs = torch.cumsum(sorted_probs, dim=-1)
                 sorted_indices_to_remove = cumsum_probs > config.top_p
-                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[
-                    ..., :-1
-                ].clone()
+                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
                 sorted_indices_to_remove[..., 0] = 0
-                indices_to_remove = sorted_indices_to_remove.scatter(
-                    1, sorted_indices, sorted_indices_to_remove
-                )
+                indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
                 next_token_probs = next_token_probs.masked_fill(indices_to_remove, 0.0)
-
+                
                 # Renormalize probabilities
                 next_token_probs = next_token_probs / next_token_probs.sum()
-
+                
                 # Sample next token
                 next_token = torch.multinomial(next_token_probs, num_samples=1)
 
@@ -163,9 +157,13 @@ class InferenceWithGists:
 
             # Check for low probability
             if token_prob < config.min_token_probability:
-                if len(gists) > 0:
+                retry_count += 1
+                if retry_count >= max_retries:
                     return cumulative_text, gists, StopReason.LOW_PROBABILITY
                 continue
+
+            # Reset retry count on successful token
+            retry_count = 0
 
             # Decode token
             next_token_text = self.tokenizer.decode(next_token[0])
@@ -182,7 +180,7 @@ class InferenceWithGists:
                 start_pos=len(cumulative_text) - len(next_token_text),
                 end_pos=len(cumulative_text),
                 token_position=token_position,
-                timestamp=current_time - start_time,
+                timestamp=current_time - start_time
             )
             gists.append(gist)
             token_position += 1
