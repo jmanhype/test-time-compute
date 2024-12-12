@@ -47,11 +47,13 @@ class GenerationConfig:
     min_token_probability: float = 0.1
     temperature: float = 0.7
     top_p: float = 0.9
-    stop_phrases: Set[str] = field(default_factory=lambda: {
-        "Final Answer:",
-        "Let's approach this step by step:",
-        "Here's what we'll do:",
-    })
+    stop_phrases: Set[str] = field(
+        default_factory=lambda: {
+            "Final Answer:",
+            "Let's approach this step by step:",
+            "Here's what we'll do:",
+        }
+    )
     timeout_seconds: float = 10.0
     batch_size: int = 1
 
@@ -110,7 +112,9 @@ class InferenceWithGists:
             config = GenerationConfig()
 
         start_time = time.time()
-        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.model.device)
+        input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(
+            self.model.device
+        )
         generated_text = ""
         gists = []
         cumulative_text = prompt
@@ -127,19 +131,25 @@ class InferenceWithGists:
                 outputs = self.model(input_ids)
                 next_token_logits = outputs.logits[:, -1, :] / config.temperature
                 next_token_probs = torch.softmax(next_token_logits, dim=-1)
-                
+
                 # Apply top-p sampling
-                sorted_probs, sorted_indices = torch.sort(next_token_probs, descending=True)
+                sorted_probs, sorted_indices = torch.sort(
+                    next_token_probs, descending=True
+                )
                 cumsum_probs = torch.cumsum(sorted_probs, dim=-1)
                 sorted_indices_to_remove = cumsum_probs > config.top_p
-                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[
+                    ..., :-1
+                ].clone()
                 sorted_indices_to_remove[..., 0] = 0
-                indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                indices_to_remove = sorted_indices_to_remove.scatter(
+                    1, sorted_indices, sorted_indices_to_remove
+                )
                 next_token_probs = next_token_probs.masked_fill(indices_to_remove, 0.0)
-                
+
                 # Renormalize probabilities
                 next_token_probs = next_token_probs / next_token_probs.sum()
-                
+
                 # Sample next token
                 next_token = torch.multinomial(next_token_probs, num_samples=1)
 
@@ -164,7 +174,7 @@ class InferenceWithGists:
                 start_pos=len(cumulative_text) - len(next_token_text),
                 end_pos=len(cumulative_text),
                 token_position=token_position,
-                timestamp=current_time - start_time
+                timestamp=current_time - start_time,
             )
             gists.append(gist)
             token_position += 1
@@ -229,7 +239,7 @@ class InferenceWithGists:
                 "average_local_coherence": 0.0,
                 "total_tokens": 0,
                 "generation_time": 0.0,
-                "tokens_per_second": 0.0
+                "tokens_per_second": 0.0,
             }
 
         # Calculate basic statistics
@@ -260,5 +270,5 @@ class InferenceWithGists:
             "average_local_coherence": avg_local_coherence,
             "total_tokens": len(gists),
             "generation_time": total_time,
-            "tokens_per_second": tokens_per_second
+            "tokens_per_second": tokens_per_second,
         }

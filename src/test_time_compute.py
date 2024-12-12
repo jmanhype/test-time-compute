@@ -69,13 +69,13 @@ class TestTimeCompute:
         # Start with minimum batch size
         current_batch_size = config.min_batch_size
         best_batch_size = current_batch_size
-        min_latency = float('inf')
+        min_latency = float("inf")
 
         while current_batch_size <= min(config.max_batch_size, len(sample_inputs)):
             # Measure latency for current batch size
             batch = sample_inputs[:current_batch_size]
             start_time = time.time()
-            
+
             # Run a few iterations to get stable measurements
             for _ in range(config.warmup_iterations):
                 with torch.no_grad():
@@ -89,21 +89,21 @@ class TestTimeCompute:
                     )
 
             latency = (time.time() - start_time) / config.warmup_iterations * 1000  # ms
-            
+
             # Update metrics
             self.performance_metrics["batch_sizes"].append(current_batch_size)
             self.performance_metrics["latencies"].append(latency)
             self.performance_metrics["throughputs"].append(current_batch_size / latency)
-            
+
             # Check if this batch size meets our constraints
             if latency <= config.target_latency_ms and latency < min_latency:
                 min_latency = latency
                 best_batch_size = current_batch_size
-            
+
             # If we're already over target latency, no point trying larger batches
             if latency > config.target_latency_ms:
                 break
-                
+
             current_batch_size *= 2
 
         return best_batch_size
@@ -137,7 +137,7 @@ class TestTimeCompute:
         # Generate in batches
         results = []
         for i in range(0, len(prompts), optimal_batch_size):
-            batch = prompts[i:i + optimal_batch_size]
+            batch = prompts[i : i + optimal_batch_size]
             inputs = self.model_initializer.tokenizer(
                 batch,
                 return_tensors="pt",
