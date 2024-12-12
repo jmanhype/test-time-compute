@@ -56,13 +56,21 @@ class TestTimeCompute:
                 "batch_sizes": [],
                 "compute_used": [],
                 "total_tokens_generated": 0,
-                "avg_tokens_per_second": 0.0
+                "avg_tokens_per_second": 0.0,
             }
 
-        avg_latency = sum(self.performance_metrics["latencies"]) / len(self.performance_metrics["latencies"])
-        avg_throughput = sum(self.performance_metrics["throughputs"]) / len(self.performance_metrics["throughputs"])
+        avg_latency = sum(self.performance_metrics["latencies"]) / len(
+            self.performance_metrics["latencies"]
+        )
+        avg_throughput = sum(self.performance_metrics["throughputs"]) / len(
+            self.performance_metrics["throughputs"]
+        )
         total_tokens = sum(self.performance_metrics["total_tokens"])
-        avg_tokens_per_second = total_tokens / sum(self.performance_metrics["latencies"]) if self.performance_metrics["latencies"] else 0.0
+        avg_tokens_per_second = (
+            total_tokens / sum(self.performance_metrics["latencies"])
+            if self.performance_metrics["latencies"]
+            else 0.0
+        )
 
         return {
             "latencies": self.performance_metrics["latencies"],
@@ -70,7 +78,7 @@ class TestTimeCompute:
             "batch_sizes": self.performance_metrics["batch_sizes"],
             "compute_used": self.performance_metrics["compute_used"],
             "total_tokens_generated": total_tokens,
-            "avg_tokens_per_second": avg_tokens_per_second
+            "avg_tokens_per_second": avg_tokens_per_second,
         }
 
     def optimize_batch_size(
@@ -175,6 +183,8 @@ class TestTimeCompute:
                 outputs, skip_special_tokens=True
             )
             results.extend(texts)
-            self.performance_metrics["total_tokens"].append(sum(len(text.split()) for text in texts))
+            self.performance_metrics["total_tokens"].append(
+                sum(len(text.split()) for text in texts)
+            )
 
         return results[0] if return_single else results
