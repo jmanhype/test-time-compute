@@ -38,7 +38,15 @@ class DivideAndConquer(ReasoningStrategy):
 
         Returns:
             List of sub-task descriptions
+
+        Raises:
+            ValueError: If problem is empty or num_subtasks < 1
         """
+        if not isinstance(problem, str) or not problem.strip():
+            raise ValueError("problem must be a non-empty string")
+
+        if not isinstance(num_subtasks, int) or num_subtasks < 1:
+            raise ValueError(f"num_subtasks must be a positive integer, got {num_subtasks}")
         # Create a prompt for decomposition
         decomposition_prompt = f"""
         Break down this problem into {num_subtasks} smaller, manageable sub-tasks:
@@ -73,7 +81,16 @@ class DivideAndConquer(ReasoningStrategy):
 
         Returns:
             Combined solution with reasoning steps
+
+        Raises:
+            ValueError: If problem is empty or num_subtasks < 1
         """
+        if not isinstance(problem, str) or not problem.strip():
+            raise ValueError("problem must be a non-empty string")
+
+        if not isinstance(num_subtasks, int) or num_subtasks < 1:
+            raise ValueError(f"num_subtasks must be a positive integer, got {num_subtasks}")
+
         subtasks = self.decompose_problem(problem, num_subtasks)
         solutions = []
 
@@ -128,7 +145,19 @@ class SelfRefinement(ReasoningStrategy):
         self.reward_fn = reward_fn or (lambda x: 0.5)  # Default dummy reward function
 
     def generate_critique(self, solution: str) -> str:
-        """Generate a critique of the current solution."""
+        """Generate a critique of the current solution.
+
+        Args:
+            solution: The solution to critique
+
+        Returns:
+            A critique with improvement suggestions
+
+        Raises:
+            ValueError: If solution is empty
+        """
+        if not isinstance(solution, str) or not solution.strip():
+            raise ValueError("solution must be a non-empty string")
         critique_prompt = f"""
         Analyze this solution and identify potential improvements:
         

@@ -51,7 +51,8 @@ class Benchmarker:
         """Initialize benchmarker with model."""
         self.model_name = model_name
         self.model_init = ModelInitializer(model_name=model_name)
-        self.compute_optimizer = TestTimeCompute(model=self.model_init.model)
+        self.model_init.initialize_model()
+        self.compute_optimizer = TestTimeCompute(model_name=model_name)
 
     def run_benchmark(
         self, test_cases: List[Dict[str, Any]], config: Optional[BenchmarkConfig] = None
@@ -103,7 +104,7 @@ class Benchmarker:
 
                 # Calculate metrics
                 latency = (time.time() - start_time) * 1000
-                performance_stats = self.compute_optimizer.get_performance_stats()
+                performance_stats = self.compute_optimizer.get_performance_metrics()
 
                 # Record results
                 task_result = {
@@ -169,22 +170,31 @@ class Benchmarker:
         logger.info(f"Saved benchmark results to {filepath}")
 
     def compare_with_baseline(
-        self, current_results: Dict[str, Any], test_cases: List[Dict[str, Any]]
+        self, test_cases: List[Dict[str, Any]], baseline_model: str, config: Optional[BenchmarkConfig] = None
     ) -> Dict[str, Any]:
-        """Compare current results with baseline model."""
-        if not current_results or "metrics" not in current_results:
-            raise ValueError("Invalid current results")
+        """Compare current model with baseline model.
 
-        baseline_config = BenchmarkConfig(
-            num_runs=current_results["config"]["num_runs"],
-            warmup_runs=current_results["config"]["warmup_runs"],
-        )
+        Args:
+            test_cases: List of test cases to benchmark
+            baseline_model: Name of baseline model to compare against
+            config: Benchmark configuration
 
-        baseline_results = self.run_benchmark(test_cases, baseline_config)
+        Returns:
+            Dictionary with comparison results
+        """
+        if config is None:
+            config = BenchmarkConfig()
+
+        # Run benchmark for current model
+        current_results = self.run_benchmark(test_cases, config)
+
+        # Run benchmark for baseline model
+        baseline_benchmarker = Benchmarker(model_name=baseline_model)
+        baseline_results = baseline_benchmarker.run_benchmark(test_cases, config)
 
         comparison = {
             "current_model": self.model_name,
-            "baseline_model": baseline_config.baseline_model,
+            "baseline_model": baseline_model,
             "metrics_comparison": {},
         }
 
