@@ -160,7 +160,22 @@ def get_dynamic_prompt(
 
     Returns:
         str: The generated prompt with appropriate context and instructions
+
+    Raises:
+        ValueError: If task_type or problem are invalid, or if steps < 1
     """
+    if not isinstance(task_type, str) or not task_type.strip():
+        raise ValueError("task_type must be a non-empty string")
+
+    if not isinstance(problem, str) or not problem.strip():
+        raise ValueError("problem must be a non-empty string")
+
+    if difficulty not in ["basic", "medium", "advanced"]:
+        raise ValueError(f"difficulty must be 'basic', 'medium', or 'advanced', got '{difficulty}'")
+
+    if not isinstance(steps, int) or steps < 1:
+        raise ValueError(f"steps must be a positive integer, got {steps}")
+
     # Get the template for the task type
     template = PROMPT_TEMPLATES.get(task_type, PROMPT_TEMPLATES["commonsense"])
 
@@ -194,7 +209,16 @@ def get_prompt_config(task_type: str, difficulty: str = "medium") -> Dict[str, A
 
     Returns:
         Dict[str, Any]: Configuration parameters including number of steps and example inclusion
+
+    Raises:
+        ValueError: If task_type or difficulty are invalid
     """
+    if not isinstance(task_type, str) or not task_type.strip():
+        raise ValueError("task_type must be a non-empty string")
+
+    if difficulty not in ["basic", "medium", "advanced"]:
+        raise ValueError(f"difficulty must be 'basic', 'medium', or 'advanced', got '{difficulty}'")
+
     config = {"include_example": True, "steps": 3}  # default
 
     # Adjust steps based on difficulty
