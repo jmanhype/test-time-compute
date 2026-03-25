@@ -1,33 +1,40 @@
-# Test Time Compute Optimization for NLRL
+# test-time-compute
 
-This project implements Natural Language Reinforcement Learning (NLRL) with optimized test-time compute strategies. It focuses on enhancing model performance through efficient compute allocation and adaptive batch sizing.
+Implements test-time compute optimization strategies for language models. Classifies tasks, selects reasoning strategies, and allocates compute adaptively during inference.
 
-## Features
+## Components
 
-- **Task Classification**: Automatically classifies input prompts into domains (math, coding, commonsense)
-- **Dynamic Prompting**: Generates context-aware prompts with chain-of-thought reasoning
-- **Reasoning Strategies**: Implements divide-and-conquer, self-refinement, and best-of-N approaches
-- **Inference with Gists**: Provides intermediate outputs during generation for debugging
-- **Test Time Compute Optimization**: Implements adaptive batch sizing and compute allocation
-- **Comprehensive Benchmarking**: Evaluates model performance across various metrics
+| File | Purpose |
+|---|---|
+| `src/task_classifier.py` | Classifies prompts into domains (math, coding, commonsense) |
+| `src/dynamic_prompt.py` | Generates chain-of-thought prompts based on task type |
+| `src/reasoning_strategies.py` | Divide-and-conquer, self-refinement, best-of-N |
+| `src/inference_with_gists.py` | Intermediate output generation during inference |
+| `src/test_time_compute.py` | Adaptive batch sizing and compute allocation |
+| `src/benchmarking.py` | Evaluation across metrics |
+| `run_benchmark.py` | CLI benchmark runner |
 
-## Installation
+## Requirements
+
+- Python 3.8+
+- Hugging Face Transformers
+- A model (default: `Qwen/Qwen2.5-Coder-0.5B-Instruct`)
+
+## Setup
 
 ```bash
-git clone https://github.com/yourusername/test_time_compute.git
-cd test_time_compute
+git clone https://github.com/jmanhype/test-time-compute.git
+cd test-time-compute
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-Run benchmarks with default settings:
 ```bash
+# Default settings
 python run_benchmark.py
-```
 
-Run benchmarks with custom settings:
-```bash
+# Custom model and parameters
 python run_benchmark.py \
     --model "Qwen/Qwen2.5-Coder-0.5B-Instruct" \
     --baseline "Qwen/Qwen2.5-Coder-0.5B" \
@@ -37,44 +44,18 @@ python run_benchmark.py \
     --test-cases test_cases.json
 ```
 
-## Project Structure
+## Tests
 
-```
-test_time_compute/
-├── src/                    # Source code
-│   ├── task_classifier.py  # Task classification module
-│   ├── dynamic_prompt.py   # Dynamic prompting module
-│   ├── reasoning_strategies.py  # Reasoning strategies
-│   ├── inference_with_gists.py  # Inference with gists
-│   └── test_time_compute.py     # Test time optimization
-├── tests/                  # Test suite
-│   └── unit/              # Unit tests
-├── benchmark_results/      # Benchmark results
-├── run_benchmark.py        # Benchmark runner
-└── test_cases.json        # Test cases for benchmarking
-```
-
-## Testing
-
-Run the test suite:
 ```bash
 pytest tests/
 ```
 
-## Contributing
+8 unit test files covering each module.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## Status
+
+Research prototype. The benchmark runner works but published results are not included in `benchmark_results/`. The strategies implement the concepts from test-time compute papers but have not been validated against published baselines. The project references NLRL (Natural Language Reinforcement Learning) in its description but the RL component is limited to prompt-based strategy selection.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Based on research in Natural Language Reinforcement Learning
-- Uses the Hugging Face Transformers library
-- Implements concepts from recent papers on test-time compute optimization
+MIT
