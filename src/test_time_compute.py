@@ -93,7 +93,23 @@ class TestTimeCompute:
 
         Returns:
             Optimal batch size
+
+        Raises:
+            ValueError: If sample_inputs is empty or invalid
+            RuntimeError: If model is not initialized
         """
+        if not sample_inputs:
+            raise ValueError("sample_inputs cannot be empty")
+
+        if not isinstance(sample_inputs, list):
+            raise ValueError("sample_inputs must be a list of strings")
+
+        if not all(isinstance(s, str) for s in sample_inputs):
+            raise ValueError("All items in sample_inputs must be strings")
+
+        if self.model_initializer.model is None:
+            raise RuntimeError("Model not initialized")
+
         if config is None:
             config = ComputeConfig()
 
@@ -151,15 +167,31 @@ class TestTimeCompute:
 
         Returns:
             Generated text or list of generated texts
+
+        Raises:
+            ValueError: If prompts is empty or invalid
+            RuntimeError: If model is not initialized
         """
+        if not prompts:
+            raise ValueError("prompts cannot be empty")
+
+        if self.model_initializer.model is None:
+            raise RuntimeError("Model not initialized. Call initialize_model() first.")
+
         if config is None:
             config = ComputeConfig()
 
         # Handle single prompt case
         if isinstance(prompts, str):
+            if not prompts.strip():
+                raise ValueError("prompt cannot be empty or whitespace")
             prompts = [prompts]
             return_single = True
         else:
+            if not isinstance(prompts, list):
+                raise ValueError("prompts must be a string or list of strings")
+            if not all(isinstance(p, str) and p.strip() for p in prompts):
+                raise ValueError("All prompts must be non-empty strings")
             return_single = False
 
         # Get optimal batch size

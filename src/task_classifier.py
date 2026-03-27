@@ -13,7 +13,19 @@ def classify_task(prompt: str) -> str:
 
     Returns:
         str: The classified domain ('math', 'coding', or 'commonsense')
+
+    Raises:
+        ValueError: If prompt is None, empty, or not a string
     """
+    if prompt is None:
+        raise ValueError("prompt cannot be None")
+
+    if not isinstance(prompt, str):
+        raise ValueError(f"prompt must be a string, got {type(prompt).__name__}")
+
+    if not prompt.strip():
+        raise ValueError("prompt cannot be empty or whitespace")
+
     lower_p = prompt.lower()
 
     math_keywords = [
